@@ -1,6 +1,9 @@
 package middleware
 
-import "net/http"
+import (
+	"log"
+	"net/http"
+)
 
 type Job struct {
 	Writer  http.ResponseWriter
@@ -13,9 +16,17 @@ type Dispatcher struct {
 	WriteChannel chan Job
 }
 
+// Worker para operaciones de lectura
 func readWorker(readChannel chan Job, router http.Handler) {
+
 	for job := range readChannel {
 
+		log.Printf(
+			"[READ WORKER] %s %s",
+			job.Request.Method,
+			job.Request.URL.Path,
+		)
+
 		router.ServeHTTP(
 			job.Writer,
 			job.Request,
@@ -25,9 +36,17 @@ func readWorker(readChannel chan Job, router http.Handler) {
 	}
 }
 
+// Worker para operaciones de escritura
 func writeWorker(writeChannel chan Job, router http.Handler) {
+
 	for job := range writeChannel {
 
+		log.Printf(
+			"[WRITE WORKER] %s %s",
+			job.Request.Method,
+			job.Request.URL.Path,
+		)
+
 		router.ServeHTTP(
 			job.Writer,
 			job.Request,
@@ -37,6 +56,7 @@ func writeWorker(writeChannel chan Job, router http.Handler) {
 	}
 }
 
+// Crear el dispatcher y levantar los workers
 func NewDispatcher(router http.Handler) *Dispatcher {
 
 	dispatcher := &Dispatcher{
@@ -55,4 +75,44 @@ func NewDispatcher(router http.Handler) *Dispatcher {
 	)
 
 	return dispatcher
+}
+
+// Middleware
+func (d *Dispatcher) ServeHTTP(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+
+	done := make(chan bool)
+
+	job := Job{
+		Writer:  w,
+		Request: r,
+		Done:    done,
+	}
+
+	switch r.Method {
+
+	case http.MethodGet:
+
+		d.ReadChannel <- job
+
+	case http.MethodPost,
+		http.MethodPut,
+		http.MethodDelete:
+
+		d.WriteChannel <- job
+
+	default:
+
+		http.Error(
+			w,
+			"Método HTTP no soportado",
+			http.StatusMethodNotAllowed,
+		)
+
+		return
+	}
+
+	<-done
 }

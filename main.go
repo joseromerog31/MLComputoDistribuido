@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"crud/controllers"
+	"crud/middleware"
 	"crud/models"
 	"crud/routes"
 )
@@ -14,12 +15,17 @@ func main() {
 	db, err := connectDatabase()
 
 	if err != nil {
-		log.Fatal("Error conectando con Postgres: ", err)
+		log.Fatal(
+			"Error conectando con Postgres: ",
+			err,
+		)
 	}
 
 	defer db.Close()
 
-	log.Println("Conexión con Postgres correcta")
+	log.Println(
+		"Conexión con Postgres correcta",
+	)
 
 	partidoModel := &models.PartidoModel{
 		DB: db,
@@ -29,13 +35,28 @@ func main() {
 		PartidoModel: partidoModel,
 	}
 
-	router := routes.SetupRoutes(partidoController)
+	router := routes.SetupRoutes(
+		partidoController,
+	)
 
-	log.Println("Servidor ejecutándose en http://localhost:8080")
+	// Middleware
+	dispatcher := middleware.NewDispatcher(
+		router,
+	)
 
-	err = http.ListenAndServe(":8080", router)
+	log.Println(
+		"Servidor ejecutándose en http://localhost:8080",
+	)
+
+	err = http.ListenAndServe(
+		":8080",
+		dispatcher,
+	)
 
 	if err != nil {
-		log.Fatal("Error iniciando el servidor: ", err)
+		log.Fatal(
+			"Error iniciando el servidor: ",
+			err,
+		)
 	}
 }

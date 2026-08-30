@@ -1,0 +1,11 @@
+curl -X POST http://localhost:8080/partidos \
+-H "Content-Type: application/json" \
+-d '{
+  "id": "TEST-003",
+  "equipo_local": "America",
+  "equipo_visitante": "Pumas",
+  "goles_equipo_local": 2,
+  "goles_equipo_visitante": 1,
+  "jornada": 1,
+  "estadio": "Estadio de prueba"
+}'
