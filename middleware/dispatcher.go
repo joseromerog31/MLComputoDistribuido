@@ -36,3 +36,23 @@ func writeWorker(writeChannel chan Job, router http.Handler) {
 		job.Done <- true
 	}
 }
+
+func NewDispatcher(router http.Handler) *Dispatcher {
+
+	dispatcher := &Dispatcher{
+		ReadChannel:  make(chan Job),
+		WriteChannel: make(chan Job),
+	}
+
+	go readWorker(
+		dispatcher.ReadChannel,
+		router,
+	)
+
+	go writeWorker(
+		dispatcher.WriteChannel,
+		router,
+	)
+
+	return dispatcher
+}
