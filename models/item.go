@@ -1,65 +1,172 @@
 package models
 
-import "database/sql"
+import (
+	"database/sql"
+	"time"
+)
 
 type Partido struct {
-	ID                   string `json:"id"`
-	EquipoLocal          string `json:"equipo_local"`
-	EquipoVisitante      string `json:"equipo_visitante"`
-	GolesEquipoLocal     int    `json:"goles_equipo_local"`
-	GolesEquipoVisitante int    `json:"goles_equipo_visitante"`
-	Jornada              int    `json:"jornada"`
-	Estadio              string `json:"estadio"`
+	ID                 int64     `json:"id"`
+	Referee            *string   `json:"referee"`
+	Timezone           *string   `json:"timezone"`
+	Date               time.Time `json:"date"`
+	VenueID            *int64    `json:"venue_id"`
+	VenueName          *string   `json:"venue_name"`
+	VenueCity          *string   `json:"venue_city"`
+	Season             int       `json:"season"`
+	Round              *string   `json:"round"`
+	HomeTeam           string    `json:"home_team"`
+	AwayTeam           string    `json:"away_team"`
+	HomeWin            *bool     `json:"home_win"`
+	AwayWin            *bool     `json:"away_win"`
+	HomeGoals          *int      `json:"home_goals"`
+	AwayGoals          *int      `json:"away_goals"`
+	HomeGoalsHalfTime  *int      `json:"home_goals_half_time"`
+	AwayGoalsHalfTime  *int      `json:"away_goals_half_time"`
+	HomeGoalsFulltime  *int      `json:"home_goals_fulltime"`
+	AwayGoalsFulltime  *int      `json:"away_goals_fulltime"`
+	HomeGoalsExtraTime *int      `json:"home_goals_extra_time"`
+	AwayGoalsExtraTime *int      `json:"away_goals_extratime"`
+	HomeGoalsPenalty   *int      `json:"home_goals_penalty"`
+	AwayGoalsPenalty   *int      `json:"away_goals_penalty"`
 }
 
 type PartidoModel struct {
 	DB *sql.DB
 }
 
-// INSERTAR
+// Permite usar la misma función de Scan()
+// tanto con QueryRow como con Rows.
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+func scanPartido(s scanner, partido *Partido) error {
+	return s.Scan(
+		&partido.ID,
+		&partido.Referee,
+		&partido.Timezone,
+		&partido.Date,
+		&partido.VenueID,
+		&partido.VenueName,
+		&partido.VenueCity,
+		&partido.Season,
+		&partido.Round,
+		&partido.HomeTeam,
+		&partido.AwayTeam,
+		&partido.HomeWin,
+		&partido.AwayWin,
+		&partido.HomeGoals,
+		&partido.AwayGoals,
+		&partido.HomeGoalsHalfTime,
+		&partido.AwayGoalsHalfTime,
+		&partido.HomeGoalsFulltime,
+		&partido.AwayGoalsFulltime,
+		&partido.HomeGoalsExtraTime,
+		&partido.AwayGoalsExtraTime,
+		&partido.HomeGoalsPenalty,
+		&partido.AwayGoalsPenalty,
+	)
+}
+
+// CREATE
 func (m *PartidoModel) Create(partido *Partido) error {
 
 	query := `
 		INSERT INTO partidos (
 			id,
-			equipo_local,
-			equipo_visitante,
-			goles_equipo_local,
-			goles_equipo_visitante,
-			jornada,
-			estadio
+			referee,
+			timezone,
+			date,
+			venue_id,
+			venue_name,
+			venue_city,
+			season,
+			round,
+			home_team,
+			away_team,
+			home_win,
+			away_win,
+			home_goals,
+			away_goals,
+			home_goals_half_time,
+			away_goals_half_time,
+			home_goals_fulltime,
+			away_goals_fulltime,
+			home_goals_extra_time,
+			away_goals_extratime,
+			home_goals_penalty,
+			away_goals_penalty
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		VALUES (
+			$1, $2, $3, $4, $5,
+			$6, $7, $8, $9, $10,
+			$11, $12, $13, $14, $15,
+			$16, $17, $18, $19, $20,
+			$21, $22, $23
+		)
 	`
 
 	_, err := m.DB.Exec(
 		query,
 		partido.ID,
-		partido.EquipoLocal,
-		partido.EquipoVisitante,
-		partido.GolesEquipoLocal,
-		partido.GolesEquipoVisitante,
-		partido.Jornada,
-		partido.Estadio,
+		partido.Referee,
+		partido.Timezone,
+		partido.Date,
+		partido.VenueID,
+		partido.VenueName,
+		partido.VenueCity,
+		partido.Season,
+		partido.Round,
+		partido.HomeTeam,
+		partido.AwayTeam,
+		partido.HomeWin,
+		partido.AwayWin,
+		partido.HomeGoals,
+		partido.AwayGoals,
+		partido.HomeGoalsHalfTime,
+		partido.AwayGoalsHalfTime,
+		partido.HomeGoalsFulltime,
+		partido.AwayGoalsFulltime,
+		partido.HomeGoalsExtraTime,
+		partido.AwayGoalsExtraTime,
+		partido.HomeGoalsPenalty,
+		partido.AwayGoalsPenalty,
 	)
 
 	return err
 }
 
-// LEER TODOS
+// READ ALL
 func (m *PartidoModel) GetAll() ([]Partido, error) {
 
 	query := `
 		SELECT
 			id,
-			equipo_local,
-			equipo_visitante,
-			goles_equipo_local,
-			goles_equipo_visitante,
-			jornada,
-			estadio
+			referee,
+			timezone,
+			date,
+			venue_id,
+			venue_name,
+			venue_city,
+			season,
+			round,
+			home_team,
+			away_team,
+			home_win,
+			away_win,
+			home_goals,
+			away_goals,
+			home_goals_half_time,
+			away_goals_half_time,
+			home_goals_fulltime,
+			away_goals_fulltime,
+			home_goals_extra_time,
+			away_goals_extratime,
+			home_goals_penalty,
+			away_goals_penalty
 		FROM partidos
-		ORDER BY jornada, id
+		ORDER BY date, id
 	`
 
 	rows, err := m.DB.Query(query)
@@ -76,21 +183,19 @@ func (m *PartidoModel) GetAll() ([]Partido, error) {
 
 		var partido Partido
 
-		err := rows.Scan(
-			&partido.ID,
-			&partido.EquipoLocal,
-			&partido.EquipoVisitante,
-			&partido.GolesEquipoLocal,
-			&partido.GolesEquipoVisitante,
-			&partido.Jornada,
-			&partido.Estadio,
+		err := scanPartido(
+			rows,
+			&partido,
 		)
 
 		if err != nil {
 			return nil, err
 		}
 
-		partidos = append(partidos, partido)
+		partidos = append(
+			partidos,
+			partido,
+		)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -100,7 +205,7 @@ func (m *PartidoModel) GetAll() ([]Partido, error) {
 	return partidos, nil
 }
 
-// LEER UNO
+// READ ONE
 func (m *PartidoModel) GetByID(id string) (*Partido, error) {
 
 	partido := &Partido{}
@@ -108,27 +213,35 @@ func (m *PartidoModel) GetByID(id string) (*Partido, error) {
 	query := `
 		SELECT
 			id,
-			equipo_local,
-			equipo_visitante,
-			goles_equipo_local,
-			goles_equipo_visitante,
-			jornada,
-			estadio
+			referee,
+			timezone,
+			date,
+			venue_id,
+			venue_name,
+			venue_city,
+			season,
+			round,
+			home_team,
+			away_team,
+			home_win,
+			away_win,
+			home_goals,
+			away_goals,
+			home_goals_half_time,
+			away_goals_half_time,
+			home_goals_fulltime,
+			away_goals_fulltime,
+			home_goals_extra_time,
+			away_goals_extratime,
+			home_goals_penalty,
+			away_goals_penalty
 		FROM partidos
 		WHERE id = $1
 	`
 
-	err := m.DB.QueryRow(
-		query,
-		id,
-	).Scan(
-		&partido.ID,
-		&partido.EquipoLocal,
-		&partido.EquipoVisitante,
-		&partido.GolesEquipoLocal,
-		&partido.GolesEquipoVisitante,
-		&partido.Jornada,
-		&partido.Estadio,
+	err := scanPartido(
+		m.DB.QueryRow(query, id),
+		partido,
 	)
 
 	if err != nil {
@@ -138,48 +251,94 @@ func (m *PartidoModel) GetByID(id string) (*Partido, error) {
 	return partido, nil
 }
 
-// ACTUALIZAR
-func (m *PartidoModel) Update(id string, partido *Partido) (*Partido, error) {
+// UPDATE
+func (m *PartidoModel) Update(
+	id string,
+	partido *Partido,
+) (*Partido, error) {
 
 	query := `
 		UPDATE partidos
 		SET
-			equipo_local = $1,
-			equipo_visitante = $2,
-			goles_equipo_local = $3,
-			goles_equipo_visitante = $4,
-			jornada = $5,
-			estadio = $6
-		WHERE id = $7
+			referee = $1,
+			timezone = $2,
+			date = $3,
+			venue_id = $4,
+			venue_name = $5,
+			venue_city = $6,
+			season = $7,
+			round = $8,
+			home_team = $9,
+			away_team = $10,
+			home_win = $11,
+			away_win = $12,
+			home_goals = $13,
+			away_goals = $14,
+			home_goals_half_time = $15,
+			away_goals_half_time = $16,
+			home_goals_fulltime = $17,
+			away_goals_fulltime = $18,
+			home_goals_extra_time = $19,
+			away_goals_extratime = $20,
+			home_goals_penalty = $21,
+			away_goals_penalty = $22
+		WHERE id = $23
 		RETURNING
 			id,
-			equipo_local,
-			equipo_visitante,
-			goles_equipo_local,
-			goles_equipo_visitante,
-			jornada,
-			estadio
+			referee,
+			timezone,
+			date,
+			venue_id,
+			venue_name,
+			venue_city,
+			season,
+			round,
+			home_team,
+			away_team,
+			home_win,
+			away_win,
+			home_goals,
+			away_goals,
+			home_goals_half_time,
+			away_goals_half_time,
+			home_goals_fulltime,
+			away_goals_fulltime,
+			home_goals_extra_time,
+			away_goals_extratime,
+			home_goals_penalty,
+			away_goals_penalty
 	`
 
 	updatedPartido := &Partido{}
 
-	err := m.DB.QueryRow(
-		query,
-		partido.EquipoLocal,
-		partido.EquipoVisitante,
-		partido.GolesEquipoLocal,
-		partido.GolesEquipoVisitante,
-		partido.Jornada,
-		partido.Estadio,
-		id,
-	).Scan(
-		&updatedPartido.ID,
-		&updatedPartido.EquipoLocal,
-		&updatedPartido.EquipoVisitante,
-		&updatedPartido.GolesEquipoLocal,
-		&updatedPartido.GolesEquipoVisitante,
-		&updatedPartido.Jornada,
-		&updatedPartido.Estadio,
+	err := scanPartido(
+		m.DB.QueryRow(
+			query,
+			partido.Referee,
+			partido.Timezone,
+			partido.Date,
+			partido.VenueID,
+			partido.VenueName,
+			partido.VenueCity,
+			partido.Season,
+			partido.Round,
+			partido.HomeTeam,
+			partido.AwayTeam,
+			partido.HomeWin,
+			partido.AwayWin,
+			partido.HomeGoals,
+			partido.AwayGoals,
+			partido.HomeGoalsHalfTime,
+			partido.AwayGoalsHalfTime,
+			partido.HomeGoalsFulltime,
+			partido.AwayGoalsFulltime,
+			partido.HomeGoalsExtraTime,
+			partido.AwayGoalsExtraTime,
+			partido.HomeGoalsPenalty,
+			partido.AwayGoalsPenalty,
+			id,
+		),
+		updatedPartido,
 	)
 
 	if err != nil {
@@ -189,7 +348,7 @@ func (m *PartidoModel) Update(id string, partido *Partido) (*Partido, error) {
 	return updatedPartido, nil
 }
 
-// BORRAR
+// DELETE
 func (m *PartidoModel) Delete(id string) error {
 
 	query := `
@@ -197,7 +356,10 @@ func (m *PartidoModel) Delete(id string) error {
 		WHERE id = $1
 	`
 
-	result, err := m.DB.Exec(query, id)
+	result, err := m.DB.Exec(
+		query,
+		id,
+	)
 
 	if err != nil {
 		return err
