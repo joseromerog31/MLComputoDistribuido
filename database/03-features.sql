@@ -1,4 +1,4 @@
-CREATE VIEW ml_features AS
+CREATE OR REPLACE VIEW ml_features AS
 SELECT
     id,
     date,
