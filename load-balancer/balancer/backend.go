@@ -1,43 +1,32 @@
 package balancer
 
 import (
-	"net/http/httputil"
 	"net/url"
 	"sync"
 )
 
 type Backend struct {
-	Name  string
-	URL   *url.URL
-	Proxy *httputil.ReverseProxy
+	Name string
+	URL  *url.URL
 
 	mu    sync.RWMutex
 	Alive bool
 }
 
 func NewBackend(name string, target string) (*Backend, error) {
-
 	backendURL, err := url.Parse(target)
-
 	if err != nil {
 		return nil, err
 	}
 
-	backend := &Backend{
+	return &Backend{
 		Name:  name,
 		URL:   backendURL,
 		Alive: true,
-	}
-
-	backend.Proxy = httputil.NewSingleHostReverseProxy(
-		backendURL,
-	)
-
-	return backend, nil
+	}, nil
 }
 
 func (b *Backend) IsAlive() bool {
-
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
@@ -45,7 +34,6 @@ func (b *Backend) IsAlive() bool {
 }
 
 func (b *Backend) SetAlive(alive bool) {
-
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
