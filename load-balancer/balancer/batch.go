@@ -9,31 +9,33 @@ import (
 	"time"
 )
 
-// Registro individual que se quiere predecir.
+// Estructuras
+
+// Registro que el Coordinator enviará a un worker
 type PredictionRecord struct {
 	ID                int64   `json:"id"`
 	HomeAvgGoalsLast5 float64 `json:"home_avg_goals_last5"`
 }
 
-// Batch completo recibido por el coordinador.
+// Formato del batch que recibe cada worker
 type BatchRequest struct {
 	Records []PredictionRecord `json:"records"`
 }
 
-// Resultado individual de una predicción.
+// Predicción individual generada por un worker
 type Prediction struct {
 	ID         int64   `json:"id"`
 	Prediction float64 `json:"prediction"`
 }
 
-// Respuesta que devuelve cada worker.
+// Respuesta que devuelve cada worker
 type WorkerResponse struct {
 	Worker      string       `json:"worker"`
 	Processed   int          `json:"processed"`
 	Predictions []Prediction `json:"predictions"`
 }
 
-// Respuesta final que devuelve el coordinador.
+// Respuesta final del Coordinator
 type BatchResponse struct {
 	TotalRecords int              `json:"total_records"`
 	WorkersUsed  int              `json:"workers_used"`
@@ -60,7 +62,7 @@ func (lb *LoadBalancer) GetHealthyBackends() []*Backend {
 	return healthy
 }
 
-// Dividir el batch
+// Dividir el batch entre los workers
 
 func splitBatch(
 	records []PredictionRecord,
@@ -71,7 +73,7 @@ func splitBatch(
 		return nil
 	}
 
-	// No tiene sentido usar más workers que registros.
+	// No usamos más workers que registros
 	if workers > len(records) {
 		workers = len(records)
 	}
@@ -90,7 +92,7 @@ func splitBatch(
 
 		size := baseSize
 
-		// Los primeros workers reciben un registro adicional si la división no es exacta.
+		// Si la división no es exacta, los primeros workers reciben un registro adicional
 		if i < remainder {
 			size++
 		}
@@ -122,7 +124,8 @@ func sendChunk(
 		return WorkerResponse{}, err
 	}
 
-	url := backend.URL.String() + "/predict-batch"
+	url := backend.URL.String() +
+		"/predict-batch"
 
 	client := http.Client{
 		Timeout: 30 * time.Second,
@@ -135,7 +138,12 @@ func sendChunk(
 	)
 
 	if err != nil {
-		return WorkerResponse{}, err
+		return WorkerResponse{},
+			fmt.Errorf(
+				"no se pudo contactar a %s: %w",
+				backend.Name,
+				err,
+			)
 	}
 
 	defer response.Body.Close()
@@ -157,84 +165,67 @@ func sendChunk(
 	).Decode(&workerResponse)
 
 	if err != nil {
-		return WorkerResponse{}, err
+		return WorkerResponse{},
+			fmt.Errorf(
+				"respuesta inválida de %s: %w",
+				backend.Name,
+				err,
+			)
 	}
 
 	return workerResponse, nil
 }
 
-// Chamba de load-balancer
+// Distribución
+func (lb *LoadBalancer) DistributeBatch(
+	records []PredictionRecord,
+) (BatchResponse, error) {
 
-func (lb *LoadBalancer) HandleBatch(
-	w http.ResponseWriter,
-	r *http.Request,
-) {
+	// Validar que haya registros.
+	if len(records) == 0 {
 
-	var request BatchRequest
-
-	err := json.NewDecoder(
-		r.Body,
-	).Decode(&request)
-
-	if err != nil {
-
-		http.Error(
-			w,
-			"JSON inválido",
-			http.StatusBadRequest,
-		)
-
-		return
+		return BatchResponse{},
+			fmt.Errorf(
+				"batch vacío",
+			)
 	}
 
-	// Verificar que haya registros.
-	if len(request.Records) == 0 {
-
-		http.Error(
-			w,
-			"Batch vacío",
-			http.StatusBadRequest,
-		)
-
-		return
-	}
-
-	// Obtener solamente workers activos.
-	backends := lb.GetHealthyBackends()
+	// Obtener únicamente workers sanos
+	backends :=
+		lb.GetHealthyBackends()
 
 	if len(backends) == 0 {
 
-		http.Error(
-			w,
-			"No hay workers disponibles",
-			http.StatusServiceUnavailable,
-		)
-
-		return
+		return BatchResponse{},
+			fmt.Errorf(
+				"no hay workers disponibles",
+			)
 	}
 
-	// Número de workers que realmente utilizaremos.
+	// Número de workers que realmente usaremos.
 	workerCount := len(backends)
 
-	if workerCount > len(request.Records) {
-		workerCount = len(request.Records)
+	if workerCount > len(records) {
+		workerCount = len(records)
 	}
 
-	backends = backends[:workerCount]
+	backends =
+		backends[:workerCount]
 
 	// Dividir registros entre workers.
 	chunks := splitBatch(
-		request.Records,
+		records,
 		workerCount,
 	)
 
-	// Guardar resultados de cada worker.
+	// Aquí guardaremos la respuesta
+	// de cada worker.
 	results := make(
 		[]WorkerResponse,
 		workerCount,
 	)
 
-	// Guardar posibles errores.
+	// Aquí guardaremos posibles errores.
 	errors := make(
 		[]error,
 		workerCount,
@@ -252,7 +243,8 @@ func (lb *LoadBalancer) HandleBatch(
 
 			defer wg.Done()
 
-			results[index], errors[index] =
+			results[index],
+				errors[index] =
 				sendChunk(
 					backends[index],
 					chunks[index],
@@ -261,58 +253,38 @@ func (lb *LoadBalancer) HandleBatch(
 		}(i)
 	}
 
-	// Esperar a que todos los workers terminen.
+	// Esperar a que todos los workers terminen
 	wg.Wait()
 
-	// Agregar los resultados
-
+	// Resultados
 	allPredictions := []Prediction{}
 
 	for i, workerErr := range errors {
 
 		if workerErr != nil {
 
-			http.Error(
-				w,
-				fmt.Sprintf(
-					"Error en %s: %v",
+			return BatchResponse{},
+				fmt.Errorf(
+					"error en %s: %w",
 					backends[i].Name,
 					workerErr,
-				),
-				http.StatusBadGateway,
-			)
-
-			return
+				)
 		}
 
-		allPredictions = append(
-			allPredictions,
-			results[i].Predictions...,
-		)
+		allPredictions =
+			append(
+				allPredictions,
+				results[i].Predictions...,
+			)
 	}
 
-	// Crear respuesta final.
+	// Respuesta final
 	response := BatchResponse{
-		TotalRecords: len(request.Records),
+		TotalRecords: len(records),
 		WorkersUsed:  workerCount,
 		Distribution: results,
 		Predictions:  allPredictions,
 	}
 
-	w.Header().Set(
-		"Content-Type",
-		"application/json",
-	)
-
-	err = json.NewEncoder(
-		w,
-	).Encode(&response)
-
-	if err != nil {
-		http.Error(
-			w,
-			"Error generando respuesta",
-			http.StatusInternalServerError,
-		)
-	}
+	return response, nil
 }

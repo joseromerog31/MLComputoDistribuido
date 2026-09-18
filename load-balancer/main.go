@@ -8,34 +8,73 @@ import (
 	"time"
 
 	"loadbalancer/balancer"
+	"loadbalancer/controllers"
+	"loadbalancer/models"
+	"loadbalancer/routes"
 )
 
 func main() {
 
-	// Obtener URLs de los workers desde Docker Compose
-	targets := os.Getenv("BACKEND_URLS")
+	// -----------------------------------------
+	// PostgreSQL
+	// -----------------------------------------
 
-	// Valores por defecto
+	db, err :=
+		connectDatabase()
+
+	if err != nil {
+		log.Fatal(
+			"Error conectando PostgreSQL: ",
+			err,
+		)
+	}
+
+	defer db.Close()
+
+	log.Println(
+		"Coordinator conectado a PostgreSQL",
+	)
+
+	// -----------------------------------------
+	// MODEL
+	// -----------------------------------------
+
+	partidoModel :=
+		&models.PartidoModel{
+			DB: db,
+		}
+
+	// -----------------------------------------
+	// WORKERS
+	// -----------------------------------------
+
+	targets :=
+		os.Getenv("BACKEND_URLS")
+
 	if targets == "" {
+
 		targets =
 			"http://worker-1:8080," +
 				"http://worker-2:8080," +
 				"http://worker-3:8080"
 	}
 
-	// Separar las URLs
-	urls := strings.Split(
-		targets,
-		",",
-	)
+	urls :=
+		strings.Split(
+			targets,
+			",",
+		)
 
-	backends := []*balancer.Backend{}
+	backends :=
+		[]*balancer.Backend{}
 
-	// Crear representación de cada worker
 	for i, target := range urls {
 
-		name := "worker-" +
-			string(rune('1'+i))
+		name :=
+			"worker-" +
+				string(
+					rune('1'+i),
+				)
 
 		backend, err :=
 			balancer.NewBackend(
@@ -44,10 +83,7 @@ func main() {
 			)
 
 		if err != nil {
-			log.Fatal(
-				"Error creando backend: ",
-				err,
-			)
+			log.Fatal(err)
 		}
 
 		backends = append(
@@ -56,60 +92,58 @@ func main() {
 		)
 
 		log.Printf(
-			"Backend registrado: %s -> %s",
+			"Worker registrado: %s -> %s",
 			name,
 			target,
 		)
 	}
 
-	// Crear Load Balancer / Coordinator
+	// -----------------------------------------
+	// DISTRIBUTOR
+	// -----------------------------------------
+
 	loadBalancer :=
 		balancer.NewLoadBalancer(
 			backends,
 		)
 
-	// Iniciar health checks
 	loadBalancer.StartHealthChecks(
 		5 * time.Second,
 	)
 
-	// Router del coordinador
-	router := http.NewServeMux()
+	// -----------------------------------------
+	// CONTROLLER
+	// -----------------------------------------
 
-	// ------------------------------------------------
-	// ML DISTRIBUIDO
-	// ------------------------------------------------
+	batchController :=
+		&controllers.BatchController{
+			PartidoModel: partidoModel,
 
-	router.HandleFunc(
-		"POST /predict-batch",
-		loadBalancer.HandleBatch,
-	)
+			LoadBalancer: loadBalancer,
+		}
 
-	// ------------------------------------------------
-	// RESTO DE PETICIONES
-	// ------------------------------------------------
-	//
-	// CRUD, etc. siguen usando el comportamiento
-	// normal del Load Balancer.
-	//
-	router.Handle(
-		"/",
-		loadBalancer,
-	)
+	// -----------------------------------------
+	// ROUTES
+	// -----------------------------------------
+
+	router :=
+		routes.SetupRoutes(
+			batchController,
+		)
 
 	log.Println(
-		"Load Balancer / Coordinator ejecutándose en :9000",
+		"Coordinator ejecutándose en :9000",
 	)
 
-	// Iniciar servidor
-	err := http.ListenAndServe(
-		":9000",
-		router,
-	)
+	err =
+		http.ListenAndServe(
+			":9000",
+			router,
+		)
 
 	if err != nil {
 		log.Fatal(
-			"Error iniciando Load Balancer: ",
+			"Error iniciando Coordinator: ",
 			err,
 		)
 	}
