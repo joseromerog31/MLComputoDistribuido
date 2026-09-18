@@ -10,8 +10,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// Crea y valida la conexión con Postgres
 func connectDatabase() (*sql.DB, error) {
 
+	// Variable de entorno para el string de la conexión
 	databaseURL :=
 		os.Getenv("DATABASE_URL")
 
@@ -21,6 +23,7 @@ func connectDatabase() (*sql.DB, error) {
 		)
 	}
 
+	// pgx se usa como driver de Postgres
 	db, err := sql.Open(
 		"pgx",
 		databaseURL,
@@ -30,7 +33,7 @@ func connectDatabase() (*sql.DB, error) {
 		return nil, err
 	}
 
-	// Timeout para comprobar conexión
+	// Timeout para comprobar conexión y que no se acepten requests sin acceso
 	ctx, cancel :=
 		context.WithTimeout(
 			context.Background(),
@@ -50,7 +53,7 @@ func connectDatabase() (*sql.DB, error) {
 		)
 	}
 
-	// Pool sencillo para este proyecto.
+	// No se ocupan más conexiones
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 

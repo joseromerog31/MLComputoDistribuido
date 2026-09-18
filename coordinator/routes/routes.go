@@ -12,7 +12,7 @@ func SetupRoutes(
 
 	router := http.NewServeMux()
 
-	// Machine Learning distribuido
+	// Machine learning distribuido
 	router.HandleFunc(
 		"POST /predict-batch",
 		batchController.PredictBatch,

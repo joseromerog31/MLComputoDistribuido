@@ -9,15 +9,17 @@ import (
 )
 
 type PredictionController struct {
-	WorkerName string
-	ScriptPath string
+	WorkerName string // Identifica que worker fue procesado en el batch
+	ScriptPath string // Para el script de ML
 }
 
+// Lo mínimo que ocupa el modelo, Postgress ya chambeo y tiene el feature
 type PredictionRecord struct {
 	ID                int64   `json:"id"`
 	HomeAvgGoalsLast5 float64 `json:"home_avg_goals_last5"`
 }
 
+// Grupo de registros asignado a un worker
 type PredictionBatchRequest struct {
 	Records []PredictionRecord `json:"records"`
 }
@@ -27,10 +29,12 @@ type Prediction struct {
 	Prediction float64 `json:"prediction"`
 }
 
+// JSON
 type PythonBatchResponse struct {
 	Predictions []Prediction `json:"predictions"`
 }
 
+// Recibe un batch y regresa predicciones hechas por el modelo
 type WorkerBatchResponse struct {
 	Worker      string       `json:"worker"`
 	Processed   int          `json:"processed"`

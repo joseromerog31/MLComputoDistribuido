@@ -8,15 +8,19 @@ import (
 	"coordinator/models"
 )
 
+// Cordina las request de predicciones entre Postgres y los workers
 type BatchController struct {
 	PartidoModel *models.PartidoModel
 	LoadBalancer *balancer.LoadBalancer
 }
 
+// Define cuantos registros deben traerse de Posgress y ser procesados
 type PredictBatchRequest struct {
 	Limit int `json:"limit"`
 }
 
+// Trae registros de Postgres y los convierte en registros de prediccion de workers
+// Los distribuye entre los workers que están activos y regresa las predicciones
 func (c *BatchController) PredictBatch(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -24,9 +28,8 @@ func (c *BatchController) PredictBatch(
 
 	var request PredictBatchRequest
 
-	err := json.NewDecoder(
-		r.Body,
-	).Decode(&request)
+	// Hacer el decode del request del cliente
+	err := json.NewDecoder(r.Body).Decode(&request)
 
 	if err != nil {
 		http.Error(
@@ -42,6 +45,7 @@ func (c *BatchController) PredictBatch(
 		request.Limit = 300
 	}
 
+	// Para que no truene
 	if request.Limit < 1 {
 		http.Error(
 			w,
@@ -51,7 +55,6 @@ func (c *BatchController) PredictBatch(
 		return
 	}
 
-	// Para que no truene
 	if request.Limit > 5000 {
 		http.Error(
 			w,
@@ -61,7 +64,7 @@ func (c *BatchController) PredictBatch(
 		return
 	}
 
-	// Obtener datos PostGress
+	// Obtener registros donde su feature haya sido calculada por la view de Postgres
 	partidos, err :=
 		c.PartidoModel.GetBatch(
 			request.Limit,
@@ -104,7 +107,7 @@ func (c *BatchController) PredictBatch(
 		)
 	}
 
-	// Cómputo distribuido
+	// Cómputo distribuido -> dividir el batch, ejecutar prediccions concurrentemente y agregar sus predicciones
 	result, err :=
 		c.LoadBalancer.DistributeBatch(
 			records,
@@ -120,7 +123,7 @@ func (c *BatchController) PredictBatch(
 		return
 	}
 
-	// View = JSON
+	// View = JSON al cliente
 	w.Header().Set(
 		"Content-Type",
 		"application/json",

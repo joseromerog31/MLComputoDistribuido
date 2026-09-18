@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,10 +16,7 @@ import (
 
 func main() {
 
-	// -----------------------------------------
-	// PostgreSQL
-	// -----------------------------------------
-
+	// Conectar al coordinator con Postgress
 	db, err :=
 		connectDatabase()
 
@@ -35,19 +33,13 @@ func main() {
 		"Coordinator conectado a PostgreSQL",
 	)
 
-	// -----------------------------------------
-	// MODEL
-	// -----------------------------------------
-
+	// El modelo para partido accesa y toma los registros de la vista de features
 	partidoModel :=
 		&models.PartidoModel{
 			DB: db,
 		}
 
-	// -----------------------------------------
-	// WORKERS
-	// -----------------------------------------
-
+	// Variable de entrono -> direcciones de workers
 	targets :=
 		os.Getenv("BACKEND_URLS")
 
@@ -65,16 +57,13 @@ func main() {
 			",",
 		)
 
+	// Registra cada worker como backend para que reciba batches
 	backends :=
 		[]*balancer.Backend{}
 
 	for i, target := range urls {
 
-		name :=
-			"worker-" +
-				string(
-					rune('1'+i),
-				)
+		name := fmt.Sprintf("worker-%d", i+1)
 
 		backend, err :=
 			balancer.NewBackend(
@@ -98,53 +87,36 @@ func main() {
 		)
 	}
 
-	// -----------------------------------------
-	// DISTRIBUTOR
-	// -----------------------------------------
-
+	// Distribuir las predicciones entre los workers que estén arriba
 	loadBalancer :=
 		balancer.NewLoadBalancer(
 			backends,
 		)
 
+	// Se corren heath checks periodicas y los workers muertos no figuran para la distribucion
 	loadBalancer.StartHealthChecks(
 		5 * time.Second,
 	)
 
-	// -----------------------------------------
-	// CONTROLLER
-	// -----------------------------------------
-
+	// Este controller coordina el flujo de prediccion
+	// Postgress -> recupera batches -> workers -> resultados
 	batchController :=
 		&controllers.BatchController{
 			PartidoModel: partidoModel,
-
 			LoadBalancer: loadBalancer,
 		}
 
-	// -----------------------------------------
-	// ROUTES
-	// -----------------------------------------
-
+	// Registra los endpoints del coordinator
 	router :=
 		routes.SetupRoutes(
 			batchController,
 		)
 
-	log.Println(
-		"Coordinator ejecutándose en :9000",
-	)
+	log.Println("Coordinator ejecutándose en :9000")
 
-	err =
-		http.ListenAndServe(
-			":9000",
-			router,
-		)
-
+	// El nginx hace paro para recibir requests y mandarlas
+	err = http.ListenAndServe(":9000", router)
 	if err != nil {
-		log.Fatal(
-			"Error iniciando Coordinator: ",
-			err,
-		)
+		log.Fatal("Error iniciando Coordinator: ", err)
 	}
 }
