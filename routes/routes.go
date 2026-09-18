@@ -8,6 +8,7 @@ import (
 
 func SetupRoutes(
 	partidoController *controllers.PartidoController,
+	predictionController *controllers.PredictionController,
 ) *http.ServeMux {
 
 	router := http.NewServeMux()
@@ -59,6 +60,11 @@ func SetupRoutes(
 	router.HandleFunc(
 		"DELETE /partidos/{id}",
 		partidoController.Delete,
+	)
+
+	router.HandleFunc(
+		"POST /predict-batch",
+		predictionController.PredictBatch,
 	)
 
 	return router

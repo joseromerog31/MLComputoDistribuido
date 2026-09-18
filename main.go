@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"crud/controllers"
 	"crud/models"
@@ -34,8 +35,23 @@ func main() {
 		PartidoModel: partidoModel,
 	}
 
+	workerName := os.Getenv(
+		"WORKER_NAME",
+	)
+
+	if workerName == "" {
+		workerName = "worker-local"
+	}
+
+	predictionController :=
+		&controllers.PredictionController{
+			WorkerName: workerName,
+			ScriptPath: "ml/predict.py",
+		}
+
 	router := routes.SetupRoutes(
 		partidoController,
+		predictionController,
 	)
 
 	log.Println(
