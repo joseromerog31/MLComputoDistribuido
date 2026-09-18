@@ -3,7 +3,7 @@ package routes
 import (
 	"net/http"
 
-	"loadbalancer/controllers"
+	"coordinator/controllers"
 )
 
 func SetupRoutes(

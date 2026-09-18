@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"loadbalancer/balancer"
-	"loadbalancer/models"
+	"coordinator/balancer"
+	"coordinator/models"
 )
 
 type BatchController struct {

@@ -6,24 +6,29 @@ import joblib
 import pandas as pd
 
 
-MODEL_PATH = (
-    Path(__file__).resolve().parent
-    / "model.pkl"
-)
+MODEL_PATH = Path(__file__).resolve().parent / "model.pkl"
+FEATURE_NAME = "home_avg_goals_last5"
 
 
 def predict_batch(records):
-
-    model_data = joblib.load(MODEL_PATH)
-    model = model_data["model"]
-
     if not records:
         return []
 
+    model_data = joblib.load(MODEL_PATH)
+
+    model = model_data["model"]
+    feature = model_data.get("feature")
+
+    if feature != FEATURE_NAME:
+        raise ValueError(
+            f"El modelo espera la feature '{feature}', "
+            f"pero predict.py utiliza '{FEATURE_NAME}'."
+        )
+
     dataframe = pd.DataFrame(
         {
-            "home_avg_goals_last5": [
-                record["home_avg_goals_last5"]
+            FEATURE_NAME: [
+                record[FEATURE_NAME]
                 for record in records
             ]
         }
@@ -33,14 +38,11 @@ def predict_batch(records):
 
     results = []
 
-    for record, prediction in zip(
-        records,
-        predictions
-    ):
+    for record, prediction in zip(records, predictions):
         results.append(
             {
                 "id": record["id"],
-                "prediction": float(prediction)
+                "prediction": float(prediction),
             }
         )
 
@@ -48,19 +50,12 @@ def predict_batch(records):
 
 
 def main():
-
     try:
-
         data = json.load(sys.stdin)
 
-        records = data.get(
-            "records",
-            []
-        )
+        records = data.get("records", [])
 
-        predictions = predict_batch(
-            records
-        )
+        predictions = predict_batch(records)
 
         print(
             json.dumps(
@@ -71,7 +66,6 @@ def main():
         )
 
     except Exception as error:
-
         print(
             json.dumps(
                 {
@@ -79,7 +73,6 @@ def main():
                 }
             )
         )
-
         sys.exit(1)
 
 

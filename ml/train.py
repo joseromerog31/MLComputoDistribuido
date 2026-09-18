@@ -1,161 +1,98 @@
 from pathlib import Path
+import os
 
 import joblib
 import pandas as pd
-
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, r2_score
+from sqlalchemy import create_engine
 
-
-# Rutas
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-CSV_PATH = BASE_DIR / "data" / "liga_mx.csv"
 
 MODEL_PATH = Path(__file__).resolve().parent / "model.pkl"
 
-# Cargar
-print("Cargando dataset...")
-
-df = pd.read_csv(CSV_PATH)
-
-print(f"Partidos encontrados: {len(df)}")
-
-# Preparar
-df["date"] = pd.to_datetime(
-    df["date"],
-    utc=True
-)
-
-# Trabajar cronológicamente.
-df = df.sort_values("date").reset_index(drop=True)
-
-# Proceso chistoso
-
-# shift(1) excluye el partido actual.
-# rolling(5) utiliza hasta sus 5 partidos anteriores como local.
-# Se evita utilizar información futura.
-
-df["home_avg_goals_last5"] = (
-    df.groupby("home_team")["home_goals_fulltime"]
-    .transform(
-        lambda goals:
-        goals.shift(1)
-        .rolling(
-            window=5,
-            min_periods=1
-        )
-        .mean()
-    )
-)
-
-# Eliminar filas inútiles
-ml_data = df[
-    [
-        "date",
-        "home_team",
-        "home_avg_goals_last5",
-        "home_goals_fulltime"
-    ]
-].dropna()
-
-
-print(
-    f"Partidos disponibles para ML: "
-    f"{len(ml_data)}"
-)
-
-X = ml_data[
-    ["home_avg_goals_last5"]
-]
-
-y = ml_data[
-    "home_goals_fulltime"
-]
-
-# TRAIN / TEST
-
-# Primer 80% = entrenamiento
-# Último 20% = prueba
-split_index = int(
-    len(ml_data) * 0.80
-)
-
-X_train = X.iloc[:split_index]
-X_test = X.iloc[split_index:]
-
-y_train = y.iloc[:split_index]
-y_test = y.iloc[split_index:]
-
-
-print(
-    f"Train: {len(X_train)} partidos"
-)
-
-print(
-    f"Test: {len(X_test)} partidos"
-)
-
-# Entrenar
-model = LinearRegression()
-
-model.fit(
-    X_train,
-    y_train
-)
-
-# Evaluación
-predictions = model.predict(
-    X_test
-)
-
-mae = mean_absolute_error(
-    y_test,
-    predictions
-)
-
-r2 = r2_score(
-    y_test,
-    predictions
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+psycopg://postgres:postgres@localhost:5432/postgres",
 )
 
 
-print("\n--- RESULTADOS ---")
+def load_data():
+    engine = create_engine(DATABASE_URL)
 
-print(
-    f"Intercepto: "
-    f"{model.intercept_:.4f}"
-)
+    query = """
+        SELECT
+            id,
+            date,
+            home_avg_goals_last5::DOUBLE PRECISION AS home_avg_goals_last5,
+            home_goals_fulltime
+        FROM ml_features
+        WHERE home_avg_goals_last5 IS NOT NULL
+          AND home_goals_fulltime IS NOT NULL
+        ORDER BY date, id;
+    """
 
-print(
-    f"Coeficiente: "
-    f"{model.coef_[0]:.4f}"
-)
+    dataframe = pd.read_sql(query, engine)
 
-print(
-    f"MAE: "
-    f"{mae:.4f}"
-)
+    engine.dispose()
 
-print(
-    f"R²: "
-    f"{r2:.4f}"
-)
+    return dataframe
 
-# Guardar modelo
-model_data = {
-    "model": model,
-    "feature": "home_avg_goals_last5",
-    "mae": mae,
-    "r2": r2,
-}
 
-joblib.dump(
-    model_data,
-    MODEL_PATH
-)
+def train_model(dataframe):
+    X = dataframe[["home_avg_goals_last5"]]
+    y = dataframe["home_goals_fulltime"]
 
-print(
-    f"\nModelo guardado en:"
-    f"\n{MODEL_PATH}"
-)
+    split_index = int(len(dataframe) * 0.8)
+
+    X_train = X.iloc[:split_index]
+    X_test = X.iloc[split_index:]
+
+    y_train = y.iloc[:split_index]
+    y_test = y.iloc[split_index:]
+
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    predictions = model.predict(X_test)
+
+    mae = mean_absolute_error(y_test, predictions)
+    r2 = r2_score(y_test, predictions)
+
+    return model, mae, r2, len(X_train), len(X_test)
+
+
+def save_model(model, mae, r2):
+    model_data = {
+        "model": model,
+        "feature": "home_avg_goals_last5",
+        "mae": mae,
+        "r2": r2,
+    }
+
+    joblib.dump(model_data, MODEL_PATH)
+
+
+def main():
+    dataframe = load_data()
+
+    if dataframe.empty:
+        raise ValueError("No hay datos disponibles para entrenar el modelo.")
+
+    model, mae, r2, train_size, test_size = train_model(dataframe)
+
+    print(f"Registros disponibles: {len(dataframe)}")
+    print(f"Entrenamiento: {train_size}")
+    print(f"Prueba: {test_size}")
+    print()
+    print(f"Intercepto: {model.intercept_:.4f}")
+    print(f"Coeficiente: {model.coef_[0]:.4f}")
+    print(f"MAE: {mae:.4f}")
+    print(f"R²: {r2:.4f}")
+    print()
+    print(f"Modelo guardado en: {MODEL_PATH}")
+
+    save_model(model, mae, r2)
+
+
+if __name__ == "__main__":
+    main()

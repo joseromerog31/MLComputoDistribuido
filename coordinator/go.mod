@@ -1,4 +1,4 @@
-module loadbalancer
+module coordinator
 
 go 1.26.5
 

@@ -1,0 +1,5 @@
+coordinator
+*.test
+coverage.out
+*.swp
+.DS_Store

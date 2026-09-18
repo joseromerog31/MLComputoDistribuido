@@ -1,3 +1,3 @@
-module crud
+module worker
 
 go 1.26.5

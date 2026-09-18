@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"loadbalancer/balancer"
-	"loadbalancer/controllers"
-	"loadbalancer/models"
-	"loadbalancer/routes"
+	"coordinator/balancer"
+	"coordinator/controllers"
+	"coordinator/models"
+	"coordinator/routes"
 )
 
 func main() {

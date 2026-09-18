@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"crud/controllers"
-	"crud/routes"
+	"worker/controllers"
+	"worker/routes"
 )
 
 func main() {

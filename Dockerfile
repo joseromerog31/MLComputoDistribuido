@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o main .
+RUN CGO_ENABLED=0 GOOS=linux go build -o worker .
 
 
 FROM python:3.12-slim
@@ -21,10 +21,10 @@ RUN pip install \
     --no-cache-dir \
     -r ml/requirements.txt
 
-COPY --from=builder /app/main ./main
+COPY --from=builder /app/worker ./worker
 
 COPY ml ./ml
 
 EXPOSE 8080
 
-CMD ["./main"]
+CMD ["./worker"]

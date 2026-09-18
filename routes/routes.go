@@ -3,7 +3,7 @@ package routes
 import (
 	"net/http"
 
-	"crud/controllers"
+	"worker/controllers"
 )
 
 func SetupRoutes(
