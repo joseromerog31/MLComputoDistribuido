@@ -4,28 +4,17 @@ services:
     build: .
     environment:
       WORKER_NAME: worker-1
-      DATABASE_URL: "host=go_db user=postgres password=postgres dbname=postgres sslmode=disable"
-    depends_on:
-      go_db:
-        condition: service_healthy
 
   worker-2:
     build: .
     environment:
       WORKER_NAME: worker-2
-      DATABASE_URL: "host=go_db user=postgres password=postgres dbname=postgres sslmode=disable"
-    depends_on:
-      go_db:
-        condition: service_healthy
 
   worker-3:
     build: .
     environment:
       WORKER_NAME: worker-3
-      DATABASE_URL: "host=go_db user=postgres password=postgres dbname=postgres sslmode=disable"
-    depends_on:
-      go_db:
-        condition: service_healthy
+
 
   load-balancer:
     build:
@@ -34,10 +23,21 @@ services:
     environment:
       BACKEND_URLS: "http://worker-1:8080,http://worker-2:8080,http://worker-3:8080"
 
+      DATABASE_URL: "host=go_db user=postgres password=postgres dbname=postgres sslmode=disable"
+
     depends_on:
-      - worker-1
-      - worker-2
-      - worker-3
+      go_db:
+        condition: service_healthy
+
+      worker-1:
+        condition: service_started
+
+      worker-2:
+        condition: service_started
+
+      worker-3:
+        condition: service_started
+
 
   go_db:
     image: postgres:12
@@ -49,27 +49,36 @@ services:
 
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./insert.sql:/docker-entrypoint-initdb.d/02-insert.sql:ro
+
+      - ./database/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./database/02-import.sql:/docker-entrypoint-initdb.d/02-import.sql:ro
+      - ./database/03-features.sql:/docker-entrypoint-initdb.d/03-features.sql:ro
+
+      - ./data/liga_mx.csv:/data/liga_mx.csv:ro
 
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U postgres"
+          "pg_isready -U postgres -d postgres"
         ]
       interval: 5s
       timeout: 5s
       retries: 5
 
+
   nginx:
     image: nginx:alpine
+
     ports:
-    - "8080:80"
+      - "8080:80"
+
     volumes:
-    - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
     depends_on:
-    - load-balancer
+      - load-balancer
+
 
 volumes:
   pgdata:

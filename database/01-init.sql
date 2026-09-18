@@ -1,5 +1,3 @@
-DROP TABLE IF EXISTS partidos;
-
 CREATE TABLE partidos (
     id BIGINT PRIMARY KEY,
 
