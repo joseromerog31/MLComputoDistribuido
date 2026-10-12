@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <title>Liga MX ML</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">◈</span>
+        <div><strong>DISTRIBUIDO<span class="brand-accent">ML</span></strong><small>DASHBORARD</small></div>
+      </div>
+      <div class="side-label">PLATAFORMA</div>
+      <nav class="side-nav" aria-label="Secciones principales">
+        <button type="button" class="nav-link active" data-view="dashboard"><span class="nav-icon">▦</span> Resumen</button>
+        <button type="button" class="nav-link" data-view="predictions"><span class="nav-icon">◈</span> Laboratorio ML</button>
+        <button type="button" class="nav-link" data-view="workers"><span class="nav-icon">▤</span> Workers</button>
+        <button type="button" class="nav-link" data-view="matches"><span class="nav-icon">▥</span> Partidos <span class="nav-soon">próximo</span></button>
+      </nav>
+      <div class="side-bottom">
+        <div class="side-mini-label">ARQUITECTURA</div>
+        <div class="stack-detail"><span class="tiny-dot dot-teal"></span> Nginx · Go · Python</div>
+        <div class="stack-detail"><span class="tiny-dot dot-blue"></span> PostgreSQL · Docker</div>
+        <div class="side-version">Versión inicial · MVP 1.0</div>
+      </div>
+    </aside>
+
+    <div class="main-column">
+      <header class="topbar">
+        <div class="top-left"><span class="top-breadcrumb">Sistema distribuido</span><span class="crumb-chevron">›</span><strong id="crumb-current">Resumen</strong></div>
+        <div class="top-actions"><span class="top-clock" id="header-time">—</span><span id="top-health" class="status-chip neutral"><span class="live-dot"></span> Comprobando…</span></div>
+      </header>
+
+      <main>
+        <section id="view-dashboard" class="view active" aria-labelledby="dashboard-heading">
+          <div class="page-heading"><div><div class="eyebrow">PANEL GENERAL <span class="eyebrow-line"></span> MONITOREO</div><h1 id="dashboard-heading">Centro de operaciones</h1><p>Ejecuta inferencias y observa cómo trabaja tu arquitectura distribuida.</p></div><button type="button" class="button secondary" id="refresh-health">↻ &nbsp; Actualizar estado</button></div>
+
+          <div class="stat-grid">
+            <article class="stat-card"><div class="stat-header">Estado del coordinador <span class="stat-symbol teal">◉</span></div><div class="stat-value" id="stat-health">Verificando</div><div class="stat-caption" id="stat-health-details">GET /api/health</div></article>
+            <article class="stat-card"><div class="stat-header">Workers configurados <span class="stat-symbol blue">▤</span></div><div class="stat-value">03</div><div class="stat-caption">Instancias declaradas en Docker Compose</div></article>
+            <article class="stat-card"><div class="stat-header">Último lote procesado <span class="stat-symbol purple">▤</span></div><div class="stat-value" id="stat-records">—</div><div class="stat-caption" id="stat-records-details">Sin ejecuciones en este navegador</div></article>
+            <article class="stat-card"><div class="stat-header">Última solicitud <span class="stat-symbol amber">◷</span></div><div class="stat-value" id="stat-latency">—</div><div class="stat-caption">Duración HTTP medida en el navegador</div></article>
+          </div>
+
+          <div class="content-grid">
+            <section class="panel run-panel" aria-labelledby="quick-heading">
+              <div class="panel-heading"><div><span class="panel-kicker">INFERENCIA DISTRIBUIDA</span><h2 id="quick-heading">Ejecutar predicción</h2><p>Envía un lote de partidos históricos al coordinador.</p></div><span class="http-pill post">POST</span></div>
+              <form id="batch-form" class="batch-form"><label for="batch-limit">Registros que deseas procesar</label><div class="limit-row"><input id="batch-limit" name="limit" type="number" min="1" max="5000" step="1" value="30" required aria-describedby="limit-help"><span class="input-suffix">registros</span></div><div class="preset-row"><span>Pruebas rápidas:</span><button type="button" class="preset" data-limit="6">6</button><button type="button" class="preset active" data-limit="30">30</button><button type="button" class="preset" data-limit="300">300</button></div><p id="limit-help" class="field-help">Máximo permitido por tu coordinador: 5,000 registros.</p><button class="button primary full" type="submit" id="run-button"><span id="run-label">▶ &nbsp; Ejecutar lote</span><span class="button-arrow">↗</span></button></form>
+              <div id="run-message" class="notice subtle" role="status" aria-live="polite">Listo para enviar una solicitud a <code>/api/predict-batch</code>.</div>
+            </section>
+            <section class="panel topology-panel" aria-labelledby="topology-heading"><div class="panel-heading"><div><span class="panel-kicker">INFRAESTRUCTURA</span><h2 id="topology-heading">Flujo de una solicitud</h2><p>La navegación nunca llama directamente a los workers.</p></div></div>
+              <div class="topology"><div class="topology-node"><span class="topology-icon">⌘</span><div><strong>Frontend</strong><small>Navegador</small></div></div><div class="topology-line"></div><div class="topology-node"><span class="topology-icon">⇄</span><div><strong>Nginx</strong><small>HTTP gateway</small></div></div><div class="topology-line"></div><div class="topology-node center"><span class="topology-icon">◈</span><div><strong>Coordinator</strong><small>Go :9000</small></div></div><div class="topology-line"></div><div class="worker-mini-grid"><div>Worker 1</div><div>Worker 2</div><div>Worker 3</div></div><div class="topology-footer">Inferencia Python · resultados JSON</div></div>
+            </section>
+          </div>
+
+          <div class="content-grid lower-grid">
+            <section class="panel" aria-labelledby="distribution-heading"><div class="panel-heading"><div><span class="panel-kicker">ÚLTIMA EJECUCIÓN</span><h2 id="distribution-heading">Distribución del lote</h2></div><span class="tiny-tag" id="distribution-tag">Sin datos</span></div><div id="distribution-chart" class="distribution-content"><div class="empty-state"><span class="empty-icon">▧</span><strong>Aún no hay resultados</strong><p>Ejecuta una predicción para visualizar la distribución real enviada por el backend.</p></div></div></section>
+            <section class="panel" aria-labelledby="activity-heading"><div class="panel-heading"><div><span class="panel-kicker">SOLICITUDES RECIENTES</span><h2 id="activity-heading">Actividad HTTP</h2></div><span class="tiny-tag">En este navegador</span></div><div id="activity-list" class="activity-list"><div class="empty-inline">No hay actividad registrada todavía.</div></div></section>
+          </div>
+        </section>
+
+        <section id="view-predictions" class="view" aria-labelledby="predictions-heading">
+          <div class="page-heading"><div><div class="eyebrow">EXPERIMENTACIÓN <span class="eyebrow-line"></span> MODELO LINEAL</div><h1 id="predictions-heading">Laboratorio de predicciones</h1><p>Analiza la respuesta de los workers y compara ejecuciones por tamaño de lote.</p></div><button type="button" id="open-run" class="button secondary">Nueva ejecución ↗</button></div>
+          <div class="stat-grid lab-stats"><article class="stat-card"><div class="stat-header">Registros devueltos</div><div class="stat-value" id="lab-records">—</div><div class="stat-caption">Según <code>total_records</code></div></article><article class="stat-card"><div class="stat-header">Workers utilizados</div><div class="stat-value" id="lab-workers">—</div><div class="stat-caption">Según <code>workers_used</code></div></article><article class="stat-card"><div class="stat-header">Tiempo HTTP</div><div class="stat-value" id="lab-latency">—</div><div class="stat-caption">Incluye red y procesamiento</div></article><article class="stat-card"><div class="stat-header">Predicciones individuales</div><div class="stat-value" id="lab-predictions">—</div><div class="stat-caption">Valores devueltos por el modelo</div></article></div>
+          <section class="panel results-panel"><div class="panel-heading"><div><span class="panel-kicker">RESPUESTA DEL SERVIDOR</span><h2>Predicciones individuales</h2><p>Regresión lineal: goles estimados del equipo local.</p></div><span class="http-pill get">JSON</span></div><div class="table-scroll"><table class="data-table"><thead><tr><th>ID de partido</th><th>Goles predichos</th><th>Modelo</th></tr></thead><tbody id="prediction-rows"><tr><td colspan="3" class="table-empty">Ejecuta tu primer lote para ver resultados.</td></tr></tbody></table></div><div id="prediction-table-note" class="table-note">Mostrando hasta 15 predicciones individuales.</div><details class="json-details"><summary>Ver JSON completo devuelto por el coordinador</summary><div class="json-toolbar"><button type="button" class="button small secondary" id="copy-json">Copiar JSON</button></div><pre id="json-output">Todavía no se ha realizado ninguna ejecución.</pre></details></section>
+          <section class="panel history-panel"><div class="panel-heading"><div><span class="panel-kicker">EXPERIMENTOS</span><h2>Historial de ejecuciones</h2><p>Guardado localmente en este navegador; no modifica PostgreSQL.</p></div><button type="button" class="button small secondary" id="clear-history">Limpiar historial</button></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Fecha</th><th>Registros solicitados</th><th>Procesados</th><th>Workers usados</th><th>Duración HTTP</th></tr></thead><tbody id="history-rows"><tr><td colspan="5" class="table-empty">Todavía no tienes ejecuciones registradas.</td></tr></tbody></table></div></section>
+        </section>
+
+        <section id="view-workers" class="view" aria-labelledby="workers-heading"><div class="page-heading"><div><div class="eyebrow">CÓMPUTO DISTRIBUIDO <span class="eyebrow-line"></span> WORKER POOL</div><h1 id="workers-heading">Workers y balanceo</h1><p>Revisa la distribución reportada por la última ejecución y prepara pruebas de tolerancia a fallos.</p></div></div>
+          <div class="worker-grid" id="worker-cards"><article class="worker-card"><span class="worker-avatar">01</span><strong>worker-1</strong><span>Estado en tiempo real: no disponible</span></article><article class="worker-card"><span class="worker-avatar">02</span><strong>worker-2</strong><span>Estado en tiempo real: no disponible</span></article><article class="worker-card"><span class="worker-avatar">03</span><strong>worker-3</strong><span>Estado en tiempo real: no disponible</span></article></div>
+          <div class="content-grid"><section class="panel"><div class="panel-heading"><div><span class="panel-kicker">ÚLTIMA RESPUESTA</span><h2>Trabajo asignado a cada worker</h2></div></div><div id="worker-detail" class="distribution-content"><div class="empty-state"><span class="empty-icon">▧</span><strong>Falta ejecutar un lote</strong><p>Los datos provendrán de <code>distribution[]</code> y no son un heartbeat continuo.</p></div></div></section><section class="panel"><div class="panel-heading"><div><span class="panel-kicker">PRUEBAS DISTRIBUIDAS</span><h2>Tolerancia a fallos</h2></div></div><p class="body-copy">Desde la terminal de Kali detén un worker, espera el siguiente health check, ejecuta otro lote y observa si se utilizan menos workers.</p><pre class="terminal">docker compose stop worker-2
+# Esperar > 5 segundos
+# Ejecutar otro lote desde el dashboard
+
+docker compose start worker-2</pre><p class="field-help">Los estados por worker no pueden consultarse en vivo hasta que añadamos <code>GET /workers</code> al coordinador.</p></section></div>
+        </section>
+
+        <section id="view-matches" class="view" aria-labelledby="matches-heading"><div class="page-heading"><div><div class="eyebrow">MÓDULO CRUD <span class="eyebrow-line"></span> SEGUNDA ETAPA</div><h1 id="matches-heading">Administración de partidos</h1><p>Interfaz planificada para consultar, crear, editar y eliminar registros históricos.</p></div><span class="coming-soon">API pendiente</span></div><div class="panel matches-panel"><div class="panel-heading"><div><span class="panel-kicker">ESTRUCTURA REST</span><h2>Operaciones que integraremos</h2><p>No hay botones de escritura activos hasta que existan los endpoints en Go.</p></div></div><div class="api-list"><div><span class="http-pill get">GET</span><code>/partidos</code><span>Listar registros</span></div><div><span class="http-pill post">POST</span><code>/partidos</code><span>Crear partido</span></div><div><span class="http-pill put">PUT</span><code>/partidos/{id}</code><span>Reemplazar registro</span></div><div><span class="http-pill patch">PATCH</span><code>/partidos/{id}</code><span>Modificar campos</span></div><div><span class="http-pill delete">DELETE</span><code>/partidos/{id}</code><span>Eliminar registro</span></div></div><div class="notice subtle">Para proteger tus datos históricos, esta primera versión no modifica PostgreSQL.</div></div></section>
+      </main>
+      <footer>Distributed ML · Liga MX <span>Frontend → Nginx → Coordinator → Workers</span></footer>
+    </div>
+  </div>
+</body>
+</html>
