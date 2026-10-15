@@ -1,47 +1,84 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"worker/consul"
 	"worker/controllers"
 	"worker/routes"
 )
 
+func envOrDefault(key, fallback string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
 func main() {
+	workerName := envOrDefault("WORKER_NAME", "worker-local")
+	workerHost := envOrDefault("WORKER_HOST", workerName)
+	consulAddress := envOrDefault("CONSUL_HTTP_ADDR", "http://localhost:8500")
 
-	// Obtener nombre de cada instancia del worker
-	workerName := os.Getenv("WORKER_NAME")
+	predictionController := &controllers.PredictionController{
+		WorkerName: workerName,
+		ScriptPath: "ml/predict.py",
+	}
+	router := routes.SetupRoutes(predictionController)
+	server := &http.Server{Addr: ":8080", Handler: router}
 
-	if workerName == "" {
-		workerName = "worker-local"
+	// Reservar el puerto antes de anunciar el worker en Consul.
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		log.Fatalf("Error iniciando %s: %v", workerName, err)
 	}
 
-	// Controller encargado de cargar el modelo de ML
-	predictionController :=
-		&controllers.PredictionController{
-			WorkerName: workerName,
-			ScriptPath: "ml/predict.py",
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErrors := make(chan error, 1)
+	go func() { serverErrors <- server.Serve(listener) }()
+	log.Printf("%s ejecutándose en el puerto 8080", workerName)
+
+	consulClient := consul.NewClient(consulAddress)
+	maintenanceDone := make(chan struct{})
+	go func() {
+		defer close(maintenanceDone)
+		consulClient.Maintain(ctx, workerName, workerHost)
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Printf("[WORKER] apagando %s", workerName)
+	case err := <-serverErrors:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("[WORKER] error del servidor: %v", err)
 		}
+	}
+	stop() // Detiene el bucle de mantenimiento antes del deregistro.
+	<-maintenanceDone
 
-	// Configurar rutas
-	router := routes.SetupRoutes(
-		predictionController,
-	)
+	deregCtx, cancelDereg := context.WithTimeout(context.Background(), 4*time.Second)
+	if err := consulClient.Deregister(deregCtx, workerName); err != nil {
+		log.Printf("[CONSUL] fallo en deregistro de %s: %v", workerName, err)
+	} else {
+		log.Printf("[CONSUL] %s eliminado del registro", workerName)
+	}
+	cancelDereg()
 
-	log.Printf(
-		"%s ejecutándose en el puerto 8080",
-		workerName,
-	)
-
-	// Cada worker escucha el mismo puerto
-	// El coordinator maneja a cada contenedor independientemente
-	err := http.ListenAndServe(":8080", router)
-	if err != nil {
-		log.Fatal(
-			"Error iniciando worker: ",
-			err,
-		)
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancelShutdown()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("[WORKER] cierre no completado: %v", err)
+		_ = server.Close()
 	}
 }
