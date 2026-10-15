@@ -1,86 +1,98 @@
 services:
+  consul:
+    image: hashicorp/consul:1.22.7
+    command:
+      - agent
+      - -server
+      - -bootstrap-expect=1
+      - -ui
+      - -client=0.0.0.0
+      - -data-dir=/consul/data
+    ports:
+      - "127.0.0.1:8500:8500"
+    volumes:
+      - consuldata:/consul/data
+    healthcheck:
+      test: ["CMD", "consul", "info", "-http-addr=http://127.0.0.1:8500"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
 
   worker-1:
     build: .
     environment:
       WORKER_NAME: worker-1
+      WORKER_HOST: worker-1
+      CONSUL_HTTP_ADDR: http://consul:8500
+    depends_on:
+      consul:
+        condition: service_healthy
+    stop_grace_period: 45s
 
   worker-2:
     build: .
     environment:
       WORKER_NAME: worker-2
+      WORKER_HOST: worker-2
+      CONSUL_HTTP_ADDR: http://consul:8500
+    depends_on:
+      consul:
+        condition: service_healthy
+    stop_grace_period: 45s
 
   worker-3:
     build: .
     environment:
       WORKER_NAME: worker-3
-
+      WORKER_HOST: worker-3
+      CONSUL_HTTP_ADDR: http://consul:8500
+    depends_on:
+      consul:
+        condition: service_healthy
+    stop_grace_period: 45s
 
   coordinator:
     build:
       context: ./coordinator
-
     environment:
-      BACKEND_URLS: "http://worker-1:8080,http://worker-2:8080,http://worker-3:8080"
-
+      CONSUL_HTTP_ADDR: http://consul:8500
       DATABASE_URL: "host=go_db user=postgres password=postgres dbname=postgres sslmode=disable"
-
     depends_on:
       go_db:
         condition: service_healthy
-
-      worker-1:
-        condition: service_started
-
-      worker-2:
-        condition: service_started
-
-      worker-3:
-        condition: service_started
-
+      consul:
+        condition: service_healthy
 
   go_db:
     image: postgres:12
-
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
       POSTGRES_DB: postgres
-
     volumes:
       - pgdata:/var/lib/postgresql/data
-
       - ./database/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
       - ./database/02-import.sql:/docker-entrypoint-initdb.d/02-import.sql:ro
       - ./database/03-features.sql:/docker-entrypoint-initdb.d/03-features.sql:ro
-
       - ./data/liga_mx.csv:/data/liga_mx.csv:ro
-
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U postgres -d postgres"
-        ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
-
     ports:
       - "5432:5432"
 
   nginx:
     image: nginx:alpine
-
     ports:
       - "8080:80"
-
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-
     depends_on:
       - coordinator
 
-
 volumes:
   pgdata:
+  consuldata:
