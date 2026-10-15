@@ -5,139 +5,81 @@ import (
 	"net/http"
 
 	"coordinator/balancer"
+	"coordinator/discovery"
 	"coordinator/models"
 )
 
-// Cordina las request de predicciones entre Postgres y los workers
+// BatchController coordina PostgreSQL -> workers -> predicciones.
+// Consul es responsable del descubrimiento y health checks.
 type BatchController struct {
 	PartidoModel *models.PartidoModel
-	LoadBalancer *balancer.LoadBalancer
+	Discovery    *discovery.Client
 }
 
-// Define cuantos registros deben traerse de Posgress y ser procesados
 type PredictBatchRequest struct {
 	Limit int `json:"limit"`
 }
 
-// Trae registros de Postgres y los convierte en registros de prediccion de workers
-// Los distribuye entre los workers que están activos y regresa las predicciones
-func (c *BatchController) PredictBatch(
-	w http.ResponseWriter,
-	r *http.Request,
-) {
-
+func (c *BatchController) PredictBatch(w http.ResponseWriter, r *http.Request) {
 	var request PredictBatchRequest
-
-	// Hacer el decode del request del cliente
-	err := json.NewDecoder(r.Body).Decode(&request)
-
-	if err != nil {
-		http.Error(
-			w,
-			"JSON inválido",
-			http.StatusBadRequest,
-		)
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "JSON inválido", http.StatusBadRequest)
 		return
 	}
-
-	// 300 de límite por defecto
 	if request.Limit == 0 {
 		request.Limit = 300
 	}
-
-	// Para que no truene
 	if request.Limit < 1 {
-		http.Error(
-			w,
-			"limit debe ser mayor a 0",
-			http.StatusBadRequest,
-		)
+		http.Error(w, "limit debe ser mayor a 0", http.StatusBadRequest)
 		return
 	}
-
 	if request.Limit > 5000 {
-		http.Error(
-			w,
-			"limit máximo permitido: 5000",
-			http.StatusBadRequest,
-		)
+		http.Error(w, "limit máximo permitido: 5000", http.StatusBadRequest)
 		return
 	}
 
-	// Obtener registros donde su feature haya sido calculada por la view de Postgres
-	partidos, err :=
-		c.PartidoModel.GetBatch(
-			request.Limit,
-		)
-
+	// Detectar workers ANTES de leer el batch para evitar una consulta
+	// a PostgreSQL cuando no queda ninguna instancia disponible.
+	backends, err := c.Discovery.HealthyWorkers(r.Context())
 	if err != nil {
-		http.Error(
-			w,
-			"Error consultando PostgreSQL: "+
-				err.Error(),
-			http.StatusInternalServerError,
-		)
+		http.Error(w, "Error consultando Consul: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	if len(backends) == 0 {
+		http.Error(w, "No hay workers saludables registrados en Consul", http.StatusServiceUnavailable)
 		return
 	}
 
+	partidos, err := c.PartidoModel.GetBatch(request.Limit)
+	if err != nil {
+		http.Error(w, "Error consultando PostgreSQL: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if len(partidos) == 0 {
-		http.Error(
-			w,
-			"No se encontraron registros para procesar",
-			http.StatusNotFound,
-		)
+		http.Error(w, "No se encontraron registros para procesar", http.StatusNotFound)
 		return
 	}
 
-	// Convertir datos del Model al formato utilizado por el sistema distribuido
-	records := make(
-		[]balancer.PredictionRecord,
-		0,
-		len(partidos),
-	)
-
+	records := make([]balancer.PredictionRecord, 0, len(partidos))
 	for _, partido := range partidos {
-
-		records = append(
-			records,
-			balancer.PredictionRecord{
-				ID:                partido.ID,
-				HomeAvgGoalsLast5: partido.HomeAvgGoalsLast5,
-			},
-		)
+		records = append(records, balancer.PredictionRecord{
+			ID:                partido.ID,
+			HomeAvgGoalsLast5: partido.HomeAvgGoalsLast5,
+		})
 	}
 
-	// Cómputo distribuido -> dividir el batch, ejecutar prediccions concurrentemente y agregar sus predicciones
-	result, err :=
-		c.LoadBalancer.DistributeBatch(
-			records,
-		)
-
+	// Cada request conserva una lista inmutable de workers.
+	// Así no cambiamos la colección mientras DistributeBatch usa goroutines.
+	loadBalancer := balancer.NewLoadBalancer(backends)
+	result, err := loadBalancer.DistributeBatch(records)
 	if err != nil {
-		http.Error(
-			w,
-			"Error distribuyendo batch: "+
-				err.Error(),
-			http.StatusBadGateway,
-		)
+		http.Error(w, "Error distribuyendo batch: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
-	// View = JSON al cliente
-	w.Header().Set(
-		"Content-Type",
-		"application/json",
-	)
-
-	err = json.NewEncoder(
-		w,
-	).Encode(result)
-
-	if err != nil {
-		http.Error(
-			w,
-			"Error generando respuesta",
-			http.StatusInternalServerError,
-		)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		// El encabezado ya pudo haber sido enviado. Solo registrar el error.
+		return
 	}
 }
